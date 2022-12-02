@@ -1,0 +1,112 @@
+image: debian:buster
+
+stages:
+  - test
+  - deploy
+
+variables:
+  LC_ALL: C.UTF-8
+  DEBIAN_FRONTEND: noninteractive
+
+# This template needs to be in text block format since `gitlab-runner
+# exec` cannot handle templates in list format.
+.apt-template: &apt-template |
+  set -e
+  set -x
+  echo Etc/UTC > /etc/timezone
+  echo 'quiet "1";' \
+       'APT::Install-Recommends "0";' \
+       'APT::Install-Suggests "0";' \
+       'APT::Acquire::Retries "20";' \
+       'APT::Get::Assume-Yes "true";' \
+       'Dpkg::Use-Pty "0";' \
+      > /etc/apt/apt.conf.d/99gitlab
+  apt-get update
+  apt-get dist-upgrade
+
+.setup-template: &setup-template
+- *apt-template
+- apt-get install
+      curl
+      fdroidserver
+      git
+      python3-babel
+      python3-bleach
+      python3-cryptography
+      python3-django-allauth
+      python3-django-compat
+      python3-django-compressor
+      python3-django-hvad
+      python3-django-js-reverse
+      python3-django-sass-processor
+      python3-dockerpycreds
+      python3-libcloud
+      python3-libsass
+      python3-magic
+      python3-pip
+      python3-psycopg2
+      python3-qrcode
+      python3-rcssmin
+      python3-rjsmin
+      python3-setuptools
+      python3-websocket
+      python3-webview
+      python3-wheel
+      rsync
+
+
+pep8:
+  stage: test
+  script:
+    - *apt-template
+    - apt-get install pep8
+    - ./tests/test-pep8.sh
+
+pylint:
+  stage: test
+  before_script:
+    - *setup-template
+    - pip3 install -r requirements.txt
+    - pip3 install -r requirements-dev.txt
+
+  script:
+    - ./tests/test-pylint.sh
+
+units:
+  stage: test
+  cache:
+    paths:
+      - /usr/local/lib/python*/dist-packages
+      - node_modules
+
+  before_script:
+    - *setup-template
+    - apt-get install npm
+    - ./setup.sh
+    - pip3 install -r requirements-dev.txt
+    - npm install --user
+
+  script:
+    - ./tests/test-units.sh
+
+docker:
+  stage: deploy
+  image: docker:git
+  services:
+    - docker:dind
+
+  before_script:
+    - echo $CI_BUILD_TOKEN | docker login -u gitlab-ci-token --password-stdin registry.gitlab.com
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker tag $CI_REGISTRY_IMAGE:latest $CI_REGISTRY_IMAGE:buster
+    - docker tag $CI_REGISTRY_IMAGE:latest $CI_REGISTRY_IMAGE:django-1.11
+    - docker push $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:buster
+    - docker push $CI_REGISTRY_IMAGE:django-1.11
+
+  when: on_success
+  only:
+    - master
+  environment:
+      name: docker
