@@ -1,0 +1,3 @@
+debian/data/org.fdroid.Repomaker.appdata.xml usr/share/metainfo/
+debian/data/org.fdroid.Repomaker.desktop usr/share/applications/
+debian/data/org.fdroid.Repomaker.svg usr/share/icons/hicolor/scalable/apps/
